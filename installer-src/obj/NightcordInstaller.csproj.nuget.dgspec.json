@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Admin\\Documents\\GitHub\\bleeds-client\\installer-src\\NightcordInstaller.csproj": {}
+    "c:\\Users\\Admin\\Documents\\GitHub\\bleeds-client\\installer-src\\NightcordInstaller.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Admin\\Documents\\GitHub\\bleeds-client\\installer-src\\NightcordInstaller.csproj": {
+    "c:\\Users\\Admin\\Documents\\GitHub\\bleeds-client\\installer-src\\NightcordInstaller.csproj": {
       "version": "2.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Admin\\Documents\\GitHub\\bleeds-client\\installer-src\\NightcordInstaller.csproj",
+        "projectUniqueName": "c:\\Users\\Admin\\Documents\\GitHub\\bleeds-client\\installer-src\\NightcordInstaller.csproj",
         "projectName": "Bleeds Client-Installer",
-        "projectPath": "C:\\Users\\Admin\\Documents\\GitHub\\bleeds-client\\installer-src\\NightcordInstaller.csproj",
+        "projectPath": "c:\\Users\\Admin\\Documents\\GitHub\\bleeds-client\\installer-src\\NightcordInstaller.csproj",
         "packagesPath": "C:\\Users\\Admin\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Admin\\Documents\\GitHub\\bleeds-client\\installer-src\\obj\\",
+        "outputPath": "c:\\Users\\Admin\\Documents\\GitHub\\bleeds-client\\installer-src\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
