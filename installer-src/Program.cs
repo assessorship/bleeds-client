@@ -142,7 +142,7 @@ namespace BleedsClientInstaller
         private string _distDir;
         private string _exeDir;
 
-        const string GITHUB_REPO = "bleedsclient/bleeds-client";
+        const string GITHUB_REPO = "assessorship/bleeds-client";
         const string DIST_ZIP = "bleeds-dist.zip";
 
         public BleedsClientBackend(LauncherForm form, WebView2 webView)
@@ -299,7 +299,7 @@ namespace BleedsClientInstaller
 
         private async Task EnsureDistAsync()
         {
-            // 1. Local dist/ folder next to the exe (portable mode)
+            // 1. Local dist/ folder next to the exe (portable mode — skip update check)
             var localDist = Path.Combine(_exeDir, "dist");
             if (Directory.Exists(localDist) && File.Exists(Path.Combine(localDist, "patcher.js")))
             {
@@ -308,21 +308,150 @@ namespace BleedsClientInstaller
                 return;
             }
 
-            // 2. Embedded dist files (bundled at build time by scripts/build-release.ps1)
-            // Resource names follow the pattern: BleedsClientInstaller.dist-embed.<filename>
-            // e.g. BleedsClientInstaller.dist-embed.patcher.js
-            // We match them by the known filenames we embed.
+            var installDir = Path.GetDirectoryName(_distDir);
+            var versionFile = Path.Combine(installDir, "version.txt");
+            var localTimestamp = File.Exists(versionFile) ? File.ReadAllText(versionFile).Trim() : null;
+            var hasLocalDist = Directory.Exists(_distDir) && File.Exists(Path.Combine(_distDir, "patcher.js"));
+
+            // 2. Check GitHub for the latest release (10s timeout, non-fatal — allows offline use)
+            SetProgress(2, "Checking for updates...");
+            string remoteTimestamp = null;
+            string zipUrl = null;
+
+            try
+            {
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));
+                var apiUrl = $"https://api.github.com/repos/{GITHUB_REPO}/releases/latest";
+                _http.DefaultRequestHeaders.Clear();
+                _http.DefaultRequestHeaders.Add("User-Agent", "BleedsClient-Installer/2.0");
+                _http.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json");
+
+                var json = await _http.GetStringAsync(apiUrl, cts.Token);
+                remoteTimestamp = ExtractJsonValue(json, "published_at");
+                zipUrl = ExtractJsonValue(json, "browser_download_url", DIST_ZIP);
+            }
+            catch { /* offline or timeout — fall through to local cache */ }
+
+            // 3. Already up to date — skip download
+            if (remoteTimestamp != null && hasLocalDist && localTimestamp == remoteTimestamp)
+            {
+                SetStatus("loading", "Bleeds Client is up to date");
+                return;
+            }
+
+            // 4. Download latest from GitHub
+            if (zipUrl != null)
+            {
+                Directory.CreateDirectory(installDir);
+                SetProgress(5, "Starting download...");
+                var tmpZip = Path.Combine(Path.GetTempPath(), "bleeds-dist.zip");
+
+                using (var response = await _http.GetAsync(zipUrl, HttpCompletionOption.ResponseHeadersRead))
+                {
+                    response.EnsureSuccessStatusCode();
+                    var totalBytes = response.Content.Headers.ContentLength ?? (long)(50.0 * 1024 * 1024);
+
+                    using (var contentStream = await response.Content.ReadAsStreamAsync())
+                    using (var fs = new FileStream(tmpZip, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
+                    {
+                        var buffer = new byte[81920];
+                        long totalRead = 0;
+                        int read;
+                        double lastReportedPercent = 0;
+
+                        while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                        {
+                            await fs.WriteAsync(buffer, 0, read);
+                            totalRead += read;
+
+                            double percent = (double)totalRead / totalBytes * 100.0;
+                            if (percent - lastReportedPercent >= 0.5 || percent >= 100.0)
+                            {
+                                lastReportedPercent = percent;
+                                double overallPercent = 5.0 + (percent * 0.70);
+                                double totalMB = (double)totalBytes / (1024.0 * 1024.0);
+                                double readMB  = (double)totalRead  / (1024.0 * 1024.0);
+                                SetProgress(overallPercent, "Downloading Bleeds Client...", readMB, totalMB);
+                            }
+                        }
+                    }
+                }
+
+                SetProgress(75, "Preparing extraction...");
+                await Task.Run(() =>
+                {
+                    if (Directory.Exists(_distDir)) Directory.Delete(_distDir, true);
+                    Directory.CreateDirectory(_distDir);
+
+                    var normalizedDistDir = _distDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                                                    + Path.DirectorySeparatorChar;
+
+                    using (var archive = ZipFile.OpenRead(tmpZip))
+                    {
+                        int totalEntries = archive.Entries.Count;
+                        int extractedEntries = 0;
+                        double lastReportedPercent = 0;
+
+                        foreach (var entry in archive.Entries)
+                        {
+                            var entryPath = entry.FullName
+                                .Replace('/', Path.DirectorySeparatorChar)
+                                .TrimStart(Path.DirectorySeparatorChar);
+
+                            if (entryPath.Contains("..")) continue;
+
+                            var fullPath = Path.GetFullPath(Path.Combine(_distDir, entryPath));
+
+                            if (!fullPath.StartsWith(normalizedDistDir, StringComparison.OrdinalIgnoreCase))
+                                continue;
+
+                            if (entry.FullName.EndsWith("/") || entry.FullName.EndsWith("\\"))
+                            {
+                                Directory.CreateDirectory(fullPath);
+                            }
+                            else
+                            {
+                                Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
+                                entry.ExtractToFile(fullPath, true);
+                            }
+
+                            extractedEntries++;
+                            double percent = (double)extractedEntries / totalEntries * 100.0;
+                            if (percent - lastReportedPercent >= 1.0 || percent >= 100.0)
+                            {
+                                lastReportedPercent = percent;
+                                double overallPercent = 75.0 + (percent * 0.15);
+                                SetProgress(overallPercent, $"Extracting files ({extractedEntries}/{totalEntries})...");
+                            }
+                        }
+                    }
+
+                    try { File.Delete(tmpZip); } catch { }
+                });
+
+                if (remoteTimestamp != null)
+                    File.WriteAllText(versionFile, remoteTimestamp);
+
+                return;
+            }
+
+            // 5. GitHub unreachable — use local cached dist (offline mode)
+            if (hasLocalDist)
+            {
+                SetStatus("loading", "Offline — using cached client files");
+                return;
+            }
+
+            // 6. Last resort: extract embedded resources (bundled at build time)
             var asm = Assembly.GetExecutingAssembly();
             var allResources = asm.GetManifestResourceNames();
             var knownFiles = new[] { "patcher.js", "renderer.js", "renderer.css", "preload.js", "package.json" };
-            // Find which known files have a matching embedded resource
             var embeddedPairs = new List<(string fileName, string resName)>();
             foreach (var fileName in knownFiles)
             {
                 foreach (var resName in allResources)
                 {
                     // MSBuild turns hyphens in folder names into underscores: dist-embed → dist_embed
-                    // so patcher.js → BleedsClientInstaller.dist_embed.patcher.js
                     if (resName.Contains("dist_embed") && resName.EndsWith(fileName, StringComparison.OrdinalIgnoreCase))
                     {
                         embeddedPairs.Add((fileName, resName));
@@ -345,130 +474,11 @@ namespace BleedsClientInstaller
                     }
                     SetProgress(5 + (i + 1) * 2, $"Extracting {fileName}...");
                 }
-                SetProgress(15, "Client files ready.");
+                SetProgress(15, "Client files ready (offline — bundled version).");
                 return;
             }
 
-            // 3. Fall back: download from GitHub release
-            SetProgress(2, "Fetching latest release information...");
-            Directory.CreateDirectory(Path.GetDirectoryName(_distDir));
-
-            var apiUrl = $"https://api.github.com/repos/{GITHUB_REPO}/releases/latest";
-            _http.DefaultRequestHeaders.Clear();
-            _http.DefaultRequestHeaders.Add("User-Agent", "BleedsClient-Installer/2.0");
-            _http.DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json");
-
-            string json;
-            try
-            {
-                json = await _http.GetStringAsync(apiUrl);
-            }
-            catch (TaskCanceledException)
-            {
-                throw new Exception("GitHub API timed out (30s). Check your internet connection and try again.");
-            }
-            catch (HttpRequestException ex)
-            {
-                throw new Exception($"Could not reach GitHub: {ex.Message}. Check your internet connection.");
-            }
-
-            var zipUrl = ExtractJsonValue(json, "browser_download_url", DIST_ZIP);
-            
-            if (string.IsNullOrEmpty(zipUrl))
-                throw new Exception($"'{DIST_ZIP}' not found in the GitHub release. The release may not be published yet.");
-
-            SetProgress(5, "Starting download...");
-            var tmpZip = Path.Combine(Path.GetTempPath(), "bleeds-dist.zip");
-            
-            using (var response = await _http.GetAsync(zipUrl, HttpCompletionOption.ResponseHeadersRead))
-            {
-                response.EnsureSuccessStatusCode();
-                var totalBytes = response.Content.Headers.ContentLength ?? (long)(348.0 * 1024 * 1024); // Fallback to 348MB if null
-                
-                using (var contentStream = await response.Content.ReadAsStreamAsync())
-                using (var fs = new FileStream(tmpZip, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
-                {
-                    var buffer = new byte[81920];
-                    long totalRead = 0;
-                    int read;
-                    double lastReportedPercent = 0;
-
-                    while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                    {
-                        await fs.WriteAsync(buffer, 0, read);
-                        totalRead += read;
-                        
-                        double percent = (double)totalRead / totalBytes * 100.0;
-                        if (percent - lastReportedPercent >= 0.5 || percent >= 100.0)
-                        {
-                            lastReportedPercent = percent;
-                            // Map 0-100% of download to 5%-75% of overall progress
-                            double overallPercent = 5.0 + (percent * 0.70);
-                            double totalMB = (double)totalBytes / (1024.0 * 1024.0);
-                            double readMB  = (double)totalRead  / (1024.0 * 1024.0);
-                            SetProgress(overallPercent, "Downloading Bleeds Client...", readMB, totalMB);
-                        }
-                    }
-                }
-            }
-
-            SetProgress(75, "Preparing extraction...");
-            await Task.Run(() => 
-            {
-                if (Directory.Exists(_distDir)) Directory.Delete(_distDir, true);
-                Directory.CreateDirectory(_distDir);
-
-                // Normalize _distDir with a guaranteed trailing separator for safe StartsWith checks
-                var normalizedDistDir = _distDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                                                + Path.DirectorySeparatorChar;
-
-                using (var archive = ZipFile.OpenRead(tmpZip))
-                {
-                    int totalEntries = archive.Entries.Count;
-                    int extractedEntries = 0;
-                    double lastReportedPercent = 0;
-
-                    foreach (var entry in archive.Entries)
-                    {
-                        // Normalize the zip entry path: replace forward slashes, strip leading slashes
-                        var entryPath = entry.FullName
-                            .Replace('/', Path.DirectorySeparatorChar)
-                            .TrimStart(Path.DirectorySeparatorChar);
-
-                        // Reject any entry that tries to traverse upward (e.g. ../../evil)
-                        if (entryPath.Contains(".."))
-                            continue;
-
-                        var fullPath = Path.GetFullPath(Path.Combine(_distDir, entryPath));
-
-                        // Security check: ensure resolved path stays inside _distDir
-                        if (!fullPath.StartsWith(normalizedDistDir, StringComparison.OrdinalIgnoreCase))
-                            continue;
-
-                        if (entry.FullName.EndsWith("/") || entry.FullName.EndsWith("\\"))
-                        {
-                            Directory.CreateDirectory(fullPath);
-                        }
-                        else
-                        {
-                            Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
-                            entry.ExtractToFile(fullPath, true);
-                        }
-
-                        extractedEntries++;
-                        double percent = (double)extractedEntries / totalEntries * 100.0;
-                        if (percent - lastReportedPercent >= 1.0 || percent >= 100.0)
-                        {
-                            lastReportedPercent = percent;
-                            // Map 0-100% of extraction to 75%-90% of overall progress
-                            double overallPercent = 75.0 + (percent * 0.15);
-                            SetProgress(overallPercent, $"Extracting files ({extractedEntries}/{totalEntries})...");
-                        }
-                    }
-                }
-                
-                try { File.Delete(tmpZip); } catch { }
-            });
+            throw new Exception("Could not obtain client files. Check your internet connection and try again.");
         }
 
         private void DoInject(string resPath)

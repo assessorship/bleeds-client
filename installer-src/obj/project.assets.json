@@ -249,11 +249,11 @@
   "project": {
     "version": "2.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\Admin\\Downloads\\nightcord-master\\nightcord-master\\installer-src\\NightcordInstaller.csproj",
+      "projectUniqueName": "C:\\Users\\Admin\\Documents\\GitHub\\bleeds-client\\installer-src\\NightcordInstaller.csproj",
       "projectName": "Bleeds Client-Installer",
-      "projectPath": "C:\\Users\\Admin\\Downloads\\nightcord-master\\nightcord-master\\installer-src\\NightcordInstaller.csproj",
+      "projectPath": "C:\\Users\\Admin\\Documents\\GitHub\\bleeds-client\\installer-src\\NightcordInstaller.csproj",
       "packagesPath": "C:\\Users\\Admin\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\Admin\\Downloads\\nightcord-master\\nightcord-master\\installer-src\\obj\\",
+      "outputPath": "C:\\Users\\Admin\\Documents\\GitHub\\bleeds-client\\installer-src\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

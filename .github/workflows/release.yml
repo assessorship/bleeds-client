@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+      - name: Build
+        run: pnpm build
+
+      - name: Package dist zip
+        run: |
+          if [ -d dist/desktop ]; then
+            cd dist/desktop && zip -r ../../bleeds-dist.zip . && cd ../..
+          else
+            echo "dist/desktop not found, zipping dist/ instead"
+            cd dist && zip -r ../bleeds-dist.zip . && cd ..
+          fi
+
+      - name: Delete existing latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+
+      - name: Create latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create latest \
+            --title "Bleeds Client (Latest)" \
+            --notes "Built from commit \`${{ github.sha }}\` on \`${{ github.ref_name }}\`" \
+            bleeds-dist.zip

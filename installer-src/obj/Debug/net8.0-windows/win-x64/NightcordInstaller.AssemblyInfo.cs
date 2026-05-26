@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("Installs Bleeds Client into Discord Desktop")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("2.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("2.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("2.0.0+e03dd27e79a4003a6a2b001dc7aa0f0a267dffd9")]
 [assembly: System.Reflection.AssemblyProductAttribute("Bleeds Client Installer")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Bleeds Client-Installer")]
 [assembly: System.Reflection.AssemblyVersionAttribute("2.0.0.0")]
