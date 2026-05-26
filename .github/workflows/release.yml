@@ -14,14 +14,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10.30.3
-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: pnpm
+
+      - name: Install pnpm
+        run: npm install -g pnpm@10.30.3
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -36,7 +34,6 @@ jobs:
           if [ -d dist/desktop ]; then
             cd dist/desktop && zip -r ../../bleeds-dist.zip . && cd ../..
           else
-            echo "dist/desktop not found, zipping dist/ instead"
             cd dist && zip -r ../bleeds-dist.zip . && cd ..
           fi
 
@@ -51,5 +48,5 @@ jobs:
         run: |
           gh release create latest \
             --title "Bleeds Client (Latest)" \
-            --notes "Built from commit \`${{ github.sha }}\` on \`${{ github.ref_name }}\`" \
+            --notes "Built from ${{ github.sha }}" \
             bleeds-dist.zip
