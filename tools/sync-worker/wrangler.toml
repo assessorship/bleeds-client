@@ -1,0 +1,10 @@
+name = "bleeds-sync"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# KV namespace — create this in the Cloudflare dashboard:
+# Workers & Pages → KV → Create namespace → name it "BLEEDS_SYNC"
+# Then replace REPLACE_WITH_YOUR_KV_ID below with the namespace ID.
+[[kv_namespaces]]
+binding = "BLEEDS_SYNC"
+id = "REPLACE_WITH_YOUR_KV_ID"

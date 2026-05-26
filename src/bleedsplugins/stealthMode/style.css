@@ -1,0 +1,16 @@
+﻿/* Stealth Mode - hide Bleeds Client plugin UI (but NOT settings access) */
+
+/* Plugin buttons: header bar, channel toolbar, chat bar, user area */
+body.Bleeds Client-stealth .vc-header-bar-btns,
+body.Bleeds Client-stealth .vc-channel-toolbar-btns,
+body.Bleeds Client-stealth .vc-chat-bar-btns,
+body.Bleeds Client-stealth .vc-user-area-btns,
+
+/* Titlebar injected elements */
+body.Bleeds Client-stealth #Bleeds Client-titlebar-btn,
+body.Bleeds Client-stealth #Bleeds Client-titlebar-link-style,
+
+/* bleedsAI nav button */
+body.Bleeds Client-stealth .nai-nav-item {
+    display: none !important;
+}
